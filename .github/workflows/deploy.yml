@@ -1,0 +1,77 @@
+name: StreamFlowAria Auto-Deploy on Commit
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  pages: write
+
+concurrency:
+  group: "streamflowaria-deploy-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Verify StreamFlowAria
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout StreamFlowAria Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Type Check & Unit Tests
+        run: |
+          npm run lint
+          npx --yes tsx --test src/utils/cicdLogic.test.ts
+
+      - name: Build Production Bundle
+        run: npm run build
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamflowaria-dist
+          path: dist/
+          retention-days: 7
+
+  deploy-cloud-run:
+    name: Deploy to Google Cloud Run
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        if: env.GCP_CREDENTIALS_CONFIGURED == 'true'
+        uses: google-github-actions/auth@v2
+        env:
+          GCP_CREDENTIALS_CONFIGURED: ${{ secrets.GCP_SA_KEY != '' && 'true' || 'false' }}
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Deploy StreamFlowAria to Cloud Run
+        if: env.GCP_CREDENTIALS_CONFIGURED == 'true'
+        uses: google-github-actions/deploy-cloudrun@v2
+        env:
+          GCP_CREDENTIALS_CONFIGURED: ${{ secrets.GCP_SA_KEY != '' && 'true' || 'false' }}
+        with:
+          service: streamflow-aria
+          region: europe-west2
+          source: .
+          flags: "--allow-unauthenticated --port=3000"

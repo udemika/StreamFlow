@@ -1,0 +1,6 @@
+{
+  "name": "StreamFlowAria CI/CD & GitHub Auto-Deploy",
+  "description": "Панель управления интеграцией с GitHub и автоматическим деплоем при каждом коммите для репозитория StreamFlowAria.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
